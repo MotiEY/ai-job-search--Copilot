@@ -1,0 +1,5 @@
+{
+  "name": "AI Job Search Assistant",
+  "description": "An AI-powered agent that analyzes job descriptions against your resume to find the perfect fit. Upload your resume, select a predefined job search, and let the AI provide a curated list of recommended and not-recommended roles.",
+  "requestFramePermissions": []
+}
