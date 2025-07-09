@@ -10,6 +10,36 @@ import type { AnalyzedJob, JobSearch } from './types';
 import { JOB_SEARCH_CONFIGS } from './constants';
 import { ErrorIcon, LightbulbIcon, ClipboardPasteIcon, WandIcon } from './components/Icons';
 
+const RECENT_SEARCHES_KEY = 'recentJobSearchQueries';
+const MAX_RECENT = 5;
+
+// Tooltip component
+const TipWithTooltip: React.FC<{ tip: React.ReactNode; tooltip: string }> = ({ tip, tooltip }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative group inline-flex items-center mr-2">
+      <span>{tip}</span>
+      <button
+        type="button"
+        className="ml-1 text-sky-500 hover:text-sky-700 focus:outline-none"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onFocus={() => setShow(true)}
+        onBlur={() => setShow(false)}
+        tabIndex={0}
+        aria-label="More info"
+      >
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" /><text x="10" y="15" textAnchor="middle" fontSize="12" fill="#fff">i</text></svg>
+      </button>
+      {show && (
+        <span className="absolute z-10 left-1/2 -translate-x-1/2 mt-2 w-64 p-2 bg-white border border-slate-300 rounded shadow text-xs text-slate-700 whitespace-normal">
+          {tooltip}
+        </span>
+      )}
+    </span>
+  );
+};
+
 const App: React.FC = () => {
   const [resumeText, setResumeText] = useState<string | null>(null);
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
@@ -24,6 +54,7 @@ const App: React.FC = () => {
   const [resumeGenerationError, setResumeGenerationError] = useState<string | null>(null);
   
   const [jobSearches, setJobSearches] = useState<JobSearch[]>(JOB_SEARCH_CONFIGS);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
   useEffect(() => {
     try {
@@ -37,11 +68,29 @@ const App: React.FC = () => {
       console.error("Failed to read resume from localStorage:", error);
     }
   }, []);
+
+  useEffect(() => {
+    // Load recent searches from localStorage
+    const saved = localStorage.getItem(RECENT_SEARCHES_KEY);
+    if (saved) {
+      setRecentSearches(JSON.parse(saved));
+    }
+  }, []);
+
+  const saveRecentSearch = (query: string) => {
+    setRecentSearches(prev => {
+      const filtered = prev.filter(q => q !== query);
+      const updated = [query, ...filtered].slice(0, MAX_RECENT);
+      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
   
   const handleUpdateSearchQuery = (index: number, newQuery: string) => {
     const updatedSearches = [...jobSearches];
     updatedSearches[index] = { ...updatedSearches[index], searchQuery: newQuery };
     setJobSearches(updatedSearches);
+    saveRecentSearch(newQuery);
   };
 
   const clearResults = () => {
@@ -93,7 +142,7 @@ const App: React.FC = () => {
     try {
       const result = await analyzePastedJobs(resumeText, pastedJobsText);
       setAnalysisResult(result);
-      if (!result) {
+      if (!result || !result.title || !result.overallFit) {
         setAnalysisError("The AI could not identify a valid job in the text you pasted. Please try pasting a single, complete job description.");
       }
     } catch (e) {
@@ -150,14 +199,72 @@ const App: React.FC = () => {
               <span className="bg-sky-500 text-white rounded-full h-8 w-8 text-sm font-bold flex items-center justify-center mr-3">2</span>
               Find Jobs
             </h2>
-             <p className="text-slate-500 mb-4 ml-11">Use the links below to search for jobs on Google. When you find a role you're interested in, copy its full job description.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {jobSearches.map((config, index) => (
-                <JobSearchCard
-                  key={config.title}
-                  jobSearch={config}
-                  onUpdateQuery={(newQuery) => handleUpdateSearchQuery(index, newQuery)}
-                />
+             <p className="text-slate-500 mb-4 ml-11">Use the search below to find jobs on LinkedIn, Indeed, or Glassdoor. Edit the query as needed, or click an example to get started.</p>
+            <div className="flex flex-col gap-6 w-full max-w-3xl mx-auto">
+              {/* Only show the first card */}
+              {jobSearches.slice(0, 1).map((config, index) => (
+                <div key={config.title}>
+                  <JobSearchCard
+                    jobSearch={config}
+                    onUpdateQuery={(newQuery) => handleUpdateSearchQuery(index, newQuery)}
+                  />
+                  {/* Example and Recent Searches - Cleaned Layout */}
+                  <div className="mt-4 mb-2">
+                    <h4 className="text-xs font-semibold text-slate-600 mb-1">Example Searches</h4>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {[
+                        '"Chief of Staff"',
+                        'title:Frontend Team Lead OR title:Engineering Manager',
+                        'VP OR AVP OR Director AND (Customer Success OR Delivery)',
+                        'AI Enablement AND (Director OR VP)',
+                        'Product Marketing Lead',
+                      ].map((example, i) => (
+                        <button
+                          key={i}
+                          className="px-3 py-1 rounded-full bg-sky-100 text-sky-700 border border-sky-200 text-xs font-mono hover:bg-sky-200 transition"
+                          onClick={() => handleUpdateSearchQuery(index, example)}
+                          type="button"
+                          title="Copy to search"
+                        >
+                          {example}
+                        </button>
+                      ))}
+                    </div>
+                    {recentSearches.length > 0 && (
+                      <>
+                        <h4 className="text-xs font-semibold text-slate-600 mb-1">Recent Searches</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {[...new Set(recentSearches)].map((recent, i) => (
+                            <button
+                              key={i}
+                              className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 text-xs font-mono hover:bg-amber-200 transition"
+                              onClick={() => handleUpdateSearchQuery(index, recent)}
+                              type="button"
+                              title="Copy to search"
+                            >
+                              {recent}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {/* Info tooltip / concise Boolean guide */}
+                  <details className="mt-2 mb-4 cursor-pointer select-none">
+                    <summary className="text-xs text-slate-500 hover:text-sky-600">How to write a search? (Boolean tips)</summary>
+                    <div className="text-xs text-slate-600 bg-slate-50 rounded p-3 mt-2">
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li><TipWithTooltip tip={<><b>OR</b> for alternatives:</>} tooltip="Find jobs with either keyword. Example: VP OR Director matches jobs with either VP or Director." /> <span className='font-mono'>VP OR Director</span></li>
+                        <li><TipWithTooltip tip={<><b>AND</b> to combine:</>} tooltip="Find jobs that mention both keywords. Example: Customer Success AND Delivery matches jobs mentioning both." /> <span className='font-mono'>Customer Success AND Delivery</span></li>
+                        <li><TipWithTooltip tip={<><b>Quotes</b> for exact job titles:</>} tooltip="Use quotes to search for the exact phrase, not just the words. Example: 'Chief of Staff' matches only that phrase." /> <span className='font-mono'>"Chief of Staff"</span></li>
+                        <li><TipWithTooltip tip={<><b>title:</b> to search in job titles only:</>} tooltip="Only jobs with this in the title will match. Example: title:Frontend Team Lead matches jobs with 'Frontend Team Lead' in the title." /> <span className='font-mono'>title:Frontend Team Lead</span></li>
+                        <li><TipWithTooltip tip={<>Combine:</>} tooltip="Mix AND, OR, and parentheses for complex searches. Example: VP OR Director AND (Customer Success OR Delivery) matches jobs with VP or Director and either Customer Success or Delivery." /> <span className='font-mono'>VP OR Director AND (Customer Success OR Delivery)</span></li>
+                        <li><TipWithTooltip tip={<><b>Tip:</b> Avoid quotes for broad concepts</>} tooltip="Quotes limit results to the exact phrase. For broad topics, leave out the quotes. Example: AI Enablement (not 'AI Enablement')." /> <span className='font-mono'>AI Enablement</span></li>
+                        <li><TipWithTooltip tip={<>LinkedIn searches the whole job description, not just the title.</>} tooltip="You may see jobs where your keywords appear in the description, not just the title. Use title: for more precise results." /> </li>
+                      </ul>
+                    </div>
+                  </details>
+                </div>
               ))}
             </div>
           </div>

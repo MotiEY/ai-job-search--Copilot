@@ -66,7 +66,7 @@ export const analyzePastedJobs = async (
     **Output Requirements:**
     - You MUST return your analysis as a single, raw JSON object.
     - The JSON object must conform to the structure of the AnalyzedJob type, containing all the fields mentioned above.
-    - Do not include any other text, explanations, or markdown fences (like \`\`\`json\`).
+    - Do not include any other text, explanations, or markdown fences (like triple backticks).
     - ALWAYS return a complete and valid JSON object, even if the job description is poorly formatted or incomplete. Make a best effort to fill in the fields. The 'title' and 'overallFit' fields are mandatory and cannot be empty.`;
 
     const prompt = `

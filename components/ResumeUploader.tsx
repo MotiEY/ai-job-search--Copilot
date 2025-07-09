@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { UploadIcon, CheckCircleIcon, XCircleIcon, ErrorIcon } from './Icons';
 import { Spinner } from './Spinner';
+import mammoth from 'mammoth';
 
 interface ResumeUploaderProps {
   onResumeUpload: (text: string, fileName: string) => void;
@@ -35,11 +36,24 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({ onResumeUpload, 
     setIsLoading(true);
 
     try {
-      const text = await file.text();
+      let text = '';
+      if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.toLowerCase().endsWith('.docx')) {
+        // DOCX parsing
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+      } else {
+        // TXT parsing
+        text = await file.text();
+      }
       onResumeUpload(text, file.name);
-    } catch (error) {
-      console.error('File reading error:', error);
-      setUploadError('Failed to read file. Please ensure it is a plain text file (e.g., .txt, .md).');
+    } catch (error: any) {
+      console.error('File reading error:', error, error?.message, error?.stack);
+      setUploadError(
+        'Failed to read file: ' +
+        (error?.message || error?.toString() || 'Unknown error') +
+        '. Please ensure it is a DOCX or plain text file (.docx, .txt).'
+      );
     } finally {
       setIsLoading(false);
       if (fileInputRef.current) {
@@ -88,7 +102,7 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({ onResumeUpload, 
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
-        accept=".txt,.md,.rtf"
+        accept=".docx,.txt"
         disabled={isLoading}
       />
       {!fileName ? (
@@ -109,7 +123,7 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({ onResumeUpload, 
             <>
               <UploadIcon className="h-10 w-10 text-slate-400 mb-3" />
               <span className="font-semibold text-slate-600">Click to upload or drag and drop</span>
-              <p className="text-sm text-slate-500 mt-1">TXT, MD, or RTF files</p>
+              <p className="text-sm text-slate-500 mt-1">DOCX or TXT files</p>
             </>
           )}
         </label>
