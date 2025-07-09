@@ -26,14 +26,7 @@ export const Header: React.FC = () => {
         <span className="text-xl font-bold text-sky-700 tracking-tight">Bruno the Headhunter</span>
       </div>
       <div className="flex items-center space-x-4">
-        <a 
-          href="https://github.com/google/generative-ai-docs" 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="text-sm font-medium text-slate-500 hover:text-sky-600 transition-colors"
-        >
-          Powered by Gemini
-        </a>
+        {/* Removed 'Powered by Gemini' link for cleaner UI */}
         <div className="flex items-center space-x-2">
           <input
             type="password"
