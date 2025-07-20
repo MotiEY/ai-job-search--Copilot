@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BotIcon } from './Icons';
 
-export const Header: React.FC = () => {
+export const Header: React.FC<{ onShowGuide: () => void }> = ({ onShowGuide }) => {
   const [apiKey, setApiKey] = useState<string>("");
   const [saved, setSaved] = useState<boolean>(false);
 
@@ -23,7 +23,15 @@ export const Header: React.FC = () => {
   return (
     <header className="w-full flex items-center justify-between py-4 px-6 bg-white border-b border-slate-200/80">
       <div className="flex items-center space-x-2">
+        <BotIcon className="h-8 w-8 text-sky-500 mr-2" />
         <span className="text-xl font-bold text-sky-700 tracking-tight">Bruno the Headhunter</span>
+        <button
+          onClick={onShowGuide}
+          className="ml-2 p-1 rounded-full bg-sky-100 hover:bg-sky-200 text-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-400"
+          aria-label="Show app guide"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" /><text x="12" y="16" textAnchor="middle" fontSize="12" fill="currentColor">i</text></svg>
+        </button>
       </div>
       <div className="flex items-center space-x-4">
         {/* Removed 'Powered by Gemini' link for cleaner UI */}

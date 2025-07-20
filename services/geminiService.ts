@@ -115,12 +115,10 @@ export const generateTailoredResume = async (
     **Communication Style Requirements:**
     1.  **Language:** Use human language that is warm, precise, strategic, and mature.
     2.  **Reflect Strengths:** The tone must reflect the candidate's key strengths.
-    3.  **Use these Aligned Soft Skills:**
-        *   Building clarity from chaos
-        *   Calm decision-making under pressure
-        *   Leading across complexity, not above it
-        *   Translating business needs into systems that work
-        *   Seeing around corners and navigating foggy environments
+    3.  **Soft Skills Guidelines:**
+        - Reflect only the soft skills that are genuinely demonstrated in the candidate's original resume or are explicitly required by the job description.
+        - Do not invent or assume soft skills that are not supported by the candidate's experience.
+        - If highlighting soft skills, ensure they are backed by concrete actions or achievements described in the resume.
     4.  **Avoid Overused Soft Skills:** Do not use phrases like "motivated," "team player," or "passionate" unless they are backed by a concrete action and impact described in the original resume.
 
     **Resume Creation Guidelines:**

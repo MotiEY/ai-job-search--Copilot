@@ -9,9 +9,17 @@ import { analyzePastedJobs, generateTailoredResume } from './services/geminiServ
 import type { AnalyzedJob, JobSearch } from './types';
 import { JOB_SEARCH_CONFIGS } from './constants';
 import { ErrorIcon, LightbulbIcon, ClipboardPasteIcon, WandIcon } from './components/Icons';
+import { GoogleGenAI } from '@google/genai';
+
+interface FavoriteSearch {
+  name: string;
+  query: string;
+}
 
 const RECENT_SEARCHES_KEY = 'recentJobSearchQueries';
 const MAX_RECENT = 5;
+const GUIDE_KEY = 'seenGuide';
+const FAVORITES_KEY = 'favoriteJobSearches';
 
 // Tooltip component
 const TipWithTooltip: React.FC<{ tip: React.ReactNode; tooltip: string }> = ({ tip, tooltip }) => {
@@ -40,6 +48,34 @@ const TipWithTooltip: React.FC<{ tip: React.ReactNode; tooltip: string }> = ({ t
   );
 };
 
+const OnboardingGuide: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+    <div className="bg-white rounded-xl shadow-lg p-6 max-w-md w-full relative animate-fade-in">
+      <button
+        onClick={onClose}
+        className="absolute top-2 right-2 text-slate-400 hover:text-red-500 text-xl font-bold focus:outline-none"
+        aria-label="Close guide"
+      >
+        ×
+      </button>
+      <h2 className="text-2xl font-bold text-sky-700 mb-2">Welcome to Bruno the Headhunter!</h2>
+      <ol className="list-decimal pl-5 space-y-2 text-slate-700 text-sm mb-4">
+        <li><b>Enter your Gemini API key</b> in the top right field. This key is stored only in your browser and never shared.</li>
+        <li><b>Upload your resume</b> (DOCX or TXT) to get started.</li>
+        <li><b>Search for jobs</b> using Boolean queries. Use the example chips or write your own. Click a platform to search.</li>
+        <li><b>Analyze jobs</b> by pasting a job description and clicking Analyze. Get AI-powered fit analysis and tailored resume suggestions.</li>
+      </ol>
+      <p className="text-xs text-slate-500 mb-4">You can always view this guide again by clicking the <b>i</b> in the top bar.</p>
+      <button
+        onClick={onClose}
+        className="w-full py-2 bg-sky-600 text-white rounded font-semibold hover:bg-sky-700 transition"
+      >
+        Got it!
+      </button>
+    </div>
+  </div>
+);
+
 const App: React.FC = () => {
   const [resumeText, setResumeText] = useState<string | null>(null);
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
@@ -55,6 +91,11 @@ const App: React.FC = () => {
   
   const [jobSearches, setJobSearches] = useState<JobSearch[]>(JOB_SEARCH_CONFIGS);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [showGuide, setShowGuide] = useState(false);
+  const [favoriteSearches, setFavoriteSearches] = useState<FavoriteSearch[]>([]);
+  const [showFavoriteModal, setShowFavoriteModal] = useState(false);
+  const [favoriteName, setFavoriteName] = useState('');
+  const [pendingFavoriteQuery, setPendingFavoriteQuery] = useState('');
 
   useEffect(() => {
     try {
@@ -75,6 +116,19 @@ const App: React.FC = () => {
     if (saved) {
       setRecentSearches(JSON.parse(saved));
     }
+  }, []);
+
+  useEffect(() => {
+    // Show onboarding guide for first-time users
+    if (!localStorage.getItem(GUIDE_KEY)) {
+      setShowGuide(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Load favorites from localStorage
+    const favs = localStorage.getItem(FAVORITES_KEY);
+    if (favs) setFavoriteSearches(JSON.parse(favs));
   }, []);
 
   const saveRecentSearch = (query: string) => {
@@ -98,9 +152,9 @@ const App: React.FC = () => {
     setAnalysisError(null);
     setTailoredResume(null);
     setResumeGenerationError(null);
-  }
+  };
 
-  const handleResumeUpload = (text: string, fileName: string) => {
+  const handleResumeUpload = async (text: string, fileName: string) => {
     setResumeText(text);
     setResumeFileName(fileName);
     clearResults();
@@ -176,10 +230,67 @@ const App: React.FC = () => {
     }
   }, [resumeText, pastedJobsText]);
 
+  const handleCloseGuide = () => {
+    setShowGuide(false);
+    localStorage.setItem(GUIDE_KEY, 'true');
+  };
+
+  const saveFavorite = (name: string, query: string) => {
+    setFavoriteSearches(prev => {
+      const filtered = prev.filter(fav => fav.query !== query && fav.name !== name);
+      const updated = [{ name, query }, ...filtered].slice(0, 8);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const removeFavorite = (query: string) => {
+    setFavoriteSearches(prev => {
+      const updated = prev.filter(fav => fav.query !== query);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-slate-100/50 font-sans text-slate-800">
-      <Header />
+      <Header onShowGuide={() => setShowGuide(true)} />
+      {showGuide && <OnboardingGuide onClose={handleCloseGuide} />}
+      {showFavoriteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-xl shadow-lg p-6 max-w-xs w-full relative animate-fade-in">
+            <button
+              onClick={() => setShowFavoriteModal(false)}
+              className="absolute top-2 right-2 text-slate-400 hover:text-red-500 text-xl font-bold focus:outline-none"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-lg font-bold text-sky-700 mb-2">Save Favorite Search</h3>
+            <input
+              type="text"
+              className="w-full border border-slate-300 rounded px-2 py-1 mb-3 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+              placeholder="Favorite name (e.g. Dream CTO)"
+              value={favoriteName}
+              onChange={e => setFavoriteName(e.target.value)}
+              autoFocus
+            />
+            <button
+              className="w-full py-2 bg-sky-600 text-white rounded font-semibold hover:bg-sky-700 transition"
+              onClick={() => {
+                if (favoriteName.trim()) {
+                  saveFavorite(favoriteName.trim(), pendingFavoriteQuery);
+                  setShowFavoriteModal(false);
+                  setFavoriteName('');
+                  setPendingFavoriteQuery('');
+                }
+              }}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
       <main className="container mx-auto p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-12">
 
@@ -204,29 +315,63 @@ const App: React.FC = () => {
               {/* Only show the first card */}
               {jobSearches.slice(0, 1).map((config, index) => (
                 <div key={config.title}>
-                  <JobSearchCard
-                    jobSearch={config}
-                    onUpdateQuery={(newQuery) => handleUpdateSearchQuery(index, newQuery)}
-                  />
+                  <div className="relative mb-2">
+                    {/* Star button absolutely positioned over the top right of the textarea */}
+                    <JobSearchCard
+                      jobSearch={config}
+                      onUpdateQuery={(newQuery) => handleUpdateSearchQuery(index, newQuery)}
+                    />
+                    <button
+                      className="absolute top-8 right-4 p-2 rounded-full border border-yellow-400 bg-white hover:bg-yellow-50 text-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-300 z-10 shadow-sm"
+                      aria-label="Save as favorite"
+                      onClick={() => {
+                        setPendingFavoriteQuery(config.searchQuery);
+                        setShowFavoriteModal(true);
+                      }}
+                      title="Save this search as a favorite"
+                      style={{ transform: 'translateY(-50%)' }}
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.122-6.545L.488 6.91l6.561-.955L10 0l2.951 5.955 6.561.955-4.756 4.635 1.122 6.545z" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1.5" /></svg>
+                    </button>
+                  </div>
                   {/* Example and Recent Searches - Cleaned Layout */}
                   <div className="mt-4 mb-2">
+                    {/* Resume keyword chips and section selector */}
                     <h4 className="text-xs font-semibold text-slate-600 mb-1">Example Searches</h4>
                     <div className="flex flex-wrap gap-2 mb-3">
                       {[
-                        '"Chief of Staff"',
-                        'title:Frontend Team Lead OR title:Engineering Manager',
-                        'VP OR AVP OR Director AND (Customer Success OR Delivery)',
-                        'AI Enablement AND (Director OR VP)',
-                        'Product Marketing Lead',
+                        {
+                          query: '(title:VP OR title:Director) AND (Product OR Engineering) AND (SaaS OR B2B)',
+                          desc: 'VP or Director roles in Product/Engineering, SaaS/B2B focus'
+                        },
+                        {
+                          query: '(VP OR Head OR Director OR Manager) AND (Product OR Engineering OR Technology)',
+                          desc: 'Seniority and function keywords anywhere in the job description'
+                        },
+                        {
+                          query: <><span>(title:Manager OR title:Lead) AND (Data OR Analytics) <span className="text-red-600 font-bold">NOT</span> "Sales"</span></>,
+                          desc: 'Manager/Lead roles in Data/Analytics, excluding Sales'
+                        },
+                        {
+                          query: '"Chief Technology Officer" AND (Cloud OR AI) AND Israel',
+                          desc: 'CTO roles with Cloud/AI focus, mentioning Israel'
+                        },
+                        {
+                          query: 'Product Manager AND (Mobile OR Web)',
+                          desc: 'Product Manager jobs with a focus on mobile or web'
+                        },
                       ].map((example, i) => (
                         <button
                           key={i}
-                          className="px-3 py-1 rounded-full bg-sky-100 text-sky-700 border border-sky-200 text-xs font-mono hover:bg-sky-200 transition"
-                          onClick={() => handleUpdateSearchQuery(index, example)}
+                          className="px-3 py-1 rounded-full bg-sky-100 text-sky-700 border border-sky-200 text-xs font-mono hover:bg-sky-200 transition relative group"
+                          onClick={() => handleUpdateSearchQuery(index, typeof example.query === 'string' ? example.query : 'NOT')}
                           type="button"
-                          title="Copy to search"
+                          title={example.desc}
                         >
-                          {example}
+                          {example.query}
+                          <span className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 p-2 bg-white border border-slate-300 rounded shadow text-xs text-slate-700 whitespace-normal z-20">
+                            {example.desc}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -244,6 +389,31 @@ const App: React.FC = () => {
                             >
                               {recent}
                             </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {favoriteSearches.length > 0 && (
+                      <>
+                        <h4 className="text-xs font-semibold text-slate-600 mb-1">Favorite Searches</h4>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {favoriteSearches.map((fav, i) => (
+                            <span key={i} className="flex items-center px-3 py-1 rounded-full bg-amber-200 text-amber-900 border border-amber-300 text-xs font-mono">
+                              <button
+                                className="mr-2 font-semibold hover:underline"
+                                onClick={() => handleUpdateSearchQuery(index, fav.query)}
+                                title={fav.query}
+                              >
+                                {fav.name}
+                              </button>
+                              <button
+                                className="ml-1 text-amber-700 hover:text-red-500 focus:outline-none"
+                                onClick={() => removeFavorite(fav.query)}
+                                aria-label="Remove favorite"
+                              >
+                                ×
+                              </button>
+                            </span>
                           ))}
                         </div>
                       </>
